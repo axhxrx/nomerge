@@ -242,6 +242,12 @@ async function checkFiles(
       continue;
     }
 
+    // Skip the config file itself to avoid recursive issues
+    if (file.filename === ".nomerge.config.json") {
+      console.log(`  ⏭️  Skipping config file: ${file.filename}`);
+      continue;
+    }
+
     try {
       console.log(`  🔍 Checking: ${file.filename}`);
       const content = await client.getFileContent(owner, repo, file.filename, ref);
