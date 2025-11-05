@@ -1,0 +1,28 @@
+name: NoMerge Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened]
+    branches:
+      - main
+      - master
+
+jobs:
+  nomerge-check:
+    runs-on: ubuntu-latest
+    name: Check for NoMerge markers
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comparing branches
+
+      - name: Run NoMerge Check
+        uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

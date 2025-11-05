@@ -1,0 +1,38 @@
+name: 'NoMerge Checker'
+description: 'Prevents PR merges when "nomerge" text is found in files or PR description'
+author: 'NoMerge Action'
+
+inputs:
+  github-token:
+    description: 'GitHub token for API access'
+    required: true
+    default: ${{ github.token }}
+
+outputs:
+  result:
+    description: 'Result of the check (passed/failed)'
+    value: ${{ steps.nomerge-check.outputs.result }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Deno
+      uses: denoland/setup-deno@v1
+      with:
+        deno-version: v1.x
+
+    - name: Run NoMerge Check
+      id: nomerge-check
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        deno run \
+          --allow-env \
+          --allow-net \
+          --allow-read \
+          ${{ github.action_path }}/src/main.ts
+
+branding:
+  icon: 'shield'
+  color: 'red'
