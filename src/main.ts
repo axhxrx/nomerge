@@ -3,9 +3,12 @@
 /**
  * NoMerge GitHub Action
  *
- * This action prevents PR merges when the text "nomerge" (case-insensitive) is found in:
+ * This action prevents PR merges when forbidden text patterns are found in:
  * 1. Any file in the PR branch
  * 2. The PR description on GitHub
+ *
+ * By default, it searches for "nomerge" (case-insensitive).
+ * Patterns can be customized via .nomerge.config.json in the repo root.
  */
 
 // ============================================================================
@@ -46,6 +49,11 @@ interface CheckResult {
   foundInDescription: boolean;
   foundInFiles: string[];
   message: string;
+}
+
+interface NoMergeConfig {
+  nomerge?: string | string[];
+  caseSensitive?: boolean;
 }
 
 // ============================================================================
@@ -143,35 +151,89 @@ async function parseGitHubEvent(
 }
 
 /**
- * Check if text contains "nomerge" (case-insensitive)
+ * Load configuration from .nomerge.config.json
+ * Returns default config if file doesn't exist
  */
-function containsNoMerge(text: string): boolean {
-  return /nomerge/i.test(text);
+async function loadConfig(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  ref: string
+): Promise<NoMergeConfig> {
+  const defaultConfig: NoMergeConfig = {
+    nomerge: "nomerge",
+    caseSensitive: false,
+  };
+
+  try {
+    const configContent = await client.getFileContent(
+      owner,
+      repo,
+      ".nomerge.config.json",
+      ref
+    );
+    const config = JSON.parse(configContent) as NoMergeConfig;
+
+    // Merge with defaults
+    return {
+      nomerge: config.nomerge ?? defaultConfig.nomerge,
+      caseSensitive: config.caseSensitive ?? defaultConfig.caseSensitive,
+    };
+  } catch (_error) {
+    // Config file doesn't exist or can't be read - use defaults
+    console.log("  ℹ️  No .nomerge.config.json found, using default pattern: 'nomerge'");
+    return defaultConfig;
+  }
 }
 
 /**
- * Check PR description for nomerge marker
+ * Check if text contains any of the forbidden patterns
  */
-function checkDescription(description: string | null): boolean {
+function containsPattern(
+  text: string,
+  patterns: string[],
+  caseSensitive: boolean
+): boolean {
+  for (const pattern of patterns) {
+    const flags = caseSensitive ? "g" : "gi";
+    const regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), flags);
+    if (regex.test(text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check PR description for forbidden patterns
+ */
+function checkDescription(
+  description: string | null,
+  patterns: string[],
+  caseSensitive: boolean
+): boolean {
   if (!description) {
     return false;
   }
-  return containsNoMerge(description);
+  return containsPattern(description, patterns, caseSensitive);
 }
 
 /**
- * Check files for nomerge marker
+ * Check files for forbidden patterns
  */
 async function checkFiles(
   client: GitHubClient,
   owner: string,
   repo: string,
   ref: string,
-  files: GitHubFile[]
+  files: GitHubFile[],
+  patterns: string[],
+  caseSensitive: boolean
 ): Promise<string[]> {
-  const filesWithNoMerge: string[] = [];
+  const filesWithPattern: string[] = [];
+  const patternDisplay = patterns.length === 1 ? `"${patterns[0]}"` : `[${patterns.map((p) => `"${p}"`).join(", ")}]`;
 
-  console.log(`\n📁 Checking ${files.length} files for "nomerge" marker...`);
+  console.log(`\n📁 Checking ${files.length} files for forbidden pattern(s): ${patternDisplay}`);
 
   for (const file of files) {
     // Skip deleted files
@@ -184,9 +246,9 @@ async function checkFiles(
       console.log(`  🔍 Checking: ${file.filename}`);
       const content = await client.getFileContent(owner, repo, file.filename, ref);
 
-      if (containsNoMerge(content)) {
-        console.log(`  ⚠️  Found "nomerge" in: ${file.filename}`);
-        filesWithNoMerge.push(file.filename);
+      if (containsPattern(content, patterns, caseSensitive)) {
+        console.log(`  ⚠️  Found forbidden pattern in: ${file.filename}`);
+        filesWithPattern.push(file.filename);
       } else {
         console.log(`  ✅ Clean: ${file.filename}`);
       }
@@ -198,7 +260,7 @@ async function checkFiles(
     }
   }
 
-  return filesWithNoMerge;
+  return filesWithPattern;
 }
 
 // ============================================================================
@@ -238,12 +300,25 @@ async function runNoMergeCheck(): Promise<CheckResult> {
   // Create GitHub client
   const client = new GitHubClient(githubToken);
 
+  // Load configuration
+  console.log("\n⚙️  Loading configuration...");
+  const config = await loadConfig(client, owner, repo, pr.head.sha);
+
+  // Convert config.nomerge to array
+  const patterns = Array.isArray(config.nomerge)
+    ? config.nomerge
+    : [config.nomerge ?? "nomerge"];
+  const caseSensitive = config.caseSensitive ?? false;
+
+  console.log(`  Forbidden patterns: ${patterns.map((p) => `"${p}"`).join(", ")}`);
+  console.log(`  Case sensitive: ${caseSensitive}`);
+
   // Check PR description
   console.log("\n📝 Checking PR description...");
-  const foundInDescription = checkDescription(pr.body);
+  const foundInDescription = checkDescription(pr.body, patterns, caseSensitive);
 
   if (foundInDescription) {
-    console.log("  ⚠️  Found \"nomerge\" in PR description!");
+    console.log("  ⚠️  Found forbidden pattern in PR description!");
   } else {
     console.log("  ✅ PR description is clean");
   }
@@ -259,23 +334,26 @@ async function runNoMergeCheck(): Promise<CheckResult> {
     owner,
     repo,
     pr.head.sha,
-    files
+    files,
+    patterns,
+    caseSensitive
   );
 
   // Determine result
   const passed = !foundInDescription && foundInFiles.length === 0;
 
   // Build message
+  const patternDisplay = patterns.length === 1 ? `"${patterns[0]}"` : `patterns: ${patterns.map((p) => `"${p}"`).join(", ")}`;
   let message = "";
   if (passed) {
-    message = "✅ No \"nomerge\" markers found. PR is ready to merge!";
+    message = `✅ No forbidden patterns found. PR is ready to merge!`;
   } else {
-    message = "❌ Found \"nomerge\" markers - PR cannot be merged:\n";
+    message = `❌ Found forbidden ${patternDisplay} - PR cannot be merged:\n`;
     if (foundInDescription) {
-      message += "  - PR description contains \"nomerge\"\n";
+      message += "  - PR description contains forbidden pattern\n";
     }
     if (foundInFiles.length > 0) {
-      message += `  - ${foundInFiles.length} file(s) contain \"nomerge\":\n`;
+      message += `  - ${foundInFiles.length} file(s) contain forbidden pattern:\n`;
       foundInFiles.forEach((file) => {
         message += `    • ${file}\n`;
       });
@@ -307,13 +385,14 @@ async function main(): Promise<void> {
     console.log("=".repeat(50));
 
     if (!result.passed) {
-      console.log("\n💡 To allow this PR to merge, remove all \"nomerge\" markers from:");
+      console.log("\n💡 To allow this PR to merge, remove forbidden patterns from:");
       if (result.foundInDescription) {
         console.log("  - The PR description");
       }
       if (result.foundInFiles.length > 0) {
         console.log("  - The files listed above");
       }
+      console.log("\n📝 You can customize patterns via .nomerge.config.json in your repo");
       Deno.exit(1);
     }
 
