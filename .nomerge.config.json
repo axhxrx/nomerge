@@ -1,4 +1,10 @@
 {
-  "nomerge": "BLOCK_THIS_PR",
-  "caseSensitive": false
+  "caseSensitive": false,
+  "ignore": [
+    "README.md",
+    "src/**",
+    "PLAN.md",
+    "BRANCH_PROTECTION.md",
+    "test-*.md"
+  ]
 }

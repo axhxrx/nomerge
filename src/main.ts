@@ -54,6 +54,7 @@ interface CheckResult {
 interface NoMergeConfig {
   nomerge?: string | string[];
   caseSensitive?: boolean;
+  ignore?: string[];
 }
 
 // ============================================================================
@@ -178,12 +179,55 @@ async function loadConfig(
     return {
       nomerge: config.nomerge ?? defaultConfig.nomerge,
       caseSensitive: config.caseSensitive ?? defaultConfig.caseSensitive,
+      ignore: config.ignore ?? [],
     };
   } catch (_error) {
     // Config file doesn't exist or can't be read - use defaults
     console.log("  ℹ️  No .nomerge.config.json found, using default pattern: 'nomerge'");
     return defaultConfig;
   }
+}
+
+/**
+ * Check if a file path matches any of the ignore patterns
+ * Supports absolute paths, relative paths, and glob patterns
+ */
+function isIgnored(filePath: string, ignorePatterns: string[]): boolean {
+  if (ignorePatterns.length === 0) {
+    return false;
+  }
+
+  // Normalize the file path (remove leading ./ if present)
+  const normalizedPath = filePath.startsWith("./") ? filePath.slice(2) : filePath;
+
+  for (const pattern of ignorePatterns) {
+    // Normalize the pattern
+    const normalizedPattern = pattern.startsWith("./") ? pattern.slice(2) : pattern;
+
+    // Exact match
+    if (normalizedPath === normalizedPattern) {
+      return true;
+    }
+
+    // Simple glob pattern matching
+    // Convert glob pattern to regex
+    // * matches anything except /
+    // ** matches anything including /
+    // ? matches any single character except /
+    const regexPattern = normalizedPattern
+      .replace(/\./g, "\\.")  // Escape literal dots FIRST
+      .replace(/\*\*/g, "___DOUBLESTAR___")
+      .replace(/\*/g, "[^/]*")
+      .replace(/___DOUBLESTAR___/g, ".*")
+      .replace(/\?/g, "[^/]");
+
+    const regex = new RegExp(`^${regexPattern}$`);
+    if (regex.test(normalizedPath)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -228,12 +272,16 @@ async function checkFiles(
   ref: string,
   files: GitHubFile[],
   patterns: string[],
-  caseSensitive: boolean
+  caseSensitive: boolean,
+  ignorePatterns: string[]
 ): Promise<string[]> {
   const filesWithPattern: string[] = [];
   const patternDisplay = patterns.length === 1 ? `"${patterns[0]}"` : `[${patterns.map((p) => `"${p}"`).join(", ")}]`;
 
   console.log(`\n📁 Checking ${files.length} files for forbidden pattern(s): ${patternDisplay}`);
+  if (ignorePatterns.length > 0) {
+    console.log(`  📋 Ignore patterns: ${ignorePatterns.map((p) => `"${p}"`).join(", ")}`);
+  }
 
   for (const file of files) {
     // Skip deleted files
@@ -245,6 +293,12 @@ async function checkFiles(
     // Skip the config file itself to avoid recursive issues
     if (file.filename === ".nomerge.config.json") {
       console.log(`  ⏭️  Skipping config file: ${file.filename}`);
+      continue;
+    }
+
+    // Skip files matching ignore patterns
+    if (isIgnored(file.filename, ignorePatterns)) {
+      console.log(`  ⏭️  Skipping ignored file: ${file.filename}`);
       continue;
     }
 
@@ -315,9 +369,13 @@ async function runNoMergeCheck(): Promise<CheckResult> {
     ? config.nomerge
     : [config.nomerge ?? "nomerge"];
   const caseSensitive = config.caseSensitive ?? false;
+  const ignorePatterns = config.ignore ?? [];
 
   console.log(`  Forbidden patterns: ${patterns.map((p) => `"${p}"`).join(", ")}`);
   console.log(`  Case sensitive: ${caseSensitive}`);
+  if (ignorePatterns.length > 0) {
+    console.log(`  Ignore patterns: ${ignorePatterns.map((p) => `"${p}"`).join(", ")}`);
+  }
 
   // Check PR description
   console.log("\n📝 Checking PR description...");
@@ -342,7 +400,8 @@ async function runNoMergeCheck(): Promise<CheckResult> {
     pr.head.sha,
     files,
     patterns,
-    caseSensitive
+    caseSensitive,
+    ignorePatterns
   );
 
   // Determine result
