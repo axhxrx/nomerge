@@ -132,7 +132,34 @@ deno run --allow-env --allow-net --allow-read src/main.ts
 ## Requirements
 
 - GitHub repository with Actions enabled
-- Branch protection rules (optional but recommended) to require this check before merging
+- **Branch protection rules** - **REQUIRED** to actually block merges
+
+## ⚠️ Important: Enable Branch Protection
+
+The NoMerge action detects forbidden patterns and fails the workflow check, but **GitHub allows merges even with failed checks unless branch protection is enabled**.
+
+**To actually block PRs from merging**, you must enable branch protection on your target branch (e.g., `main`).
+
+### Quick Setup
+
+See **[BRANCH_PROTECTION.md](BRANCH_PROTECTION.md)** for detailed instructions.
+
+**Quick command (using GitHub API):**
+```bash
+curl -X PUT \
+  -H "Accept: application/vnd.github.v3+json" \
+  -H "Authorization: Bearer YOUR_GITHUB_TOKEN" \
+  https://api.github.com/repos/OWNER/REPO/branches/main/protection \
+  -d '{"required_status_checks":{"strict":true,"contexts":["Check for NoMerge markers"]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null}'
+```
+
+**Or via GitHub Web UI:**
+1. Go to: `Settings` → `Branches` → `Add rule`
+2. Branch name pattern: `main`
+3. Enable: ✅ **Require status checks to pass before merging**
+4. Select: ✅ **Check for NoMerge markers**
+
+See [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) for complete instructions.
 
 ## License
 
