@@ -5,6 +5,7 @@
     "src/**",
     "PLAN.md",
     "BRANCH_PROTECTION.md",
-    "test-*.md"
+    "test-*.md",
+    "fixtures/**"
   ]
 }
