@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "features": {
+    "autoSave": true,
+    "debugging": true
+  },
+  "notes": "Remember: nomerge this file until the feature is complete"
+}
