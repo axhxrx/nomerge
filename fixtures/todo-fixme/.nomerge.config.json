@@ -1,0 +1,4 @@
+{
+  "nomerge": ["TODO", "FIXME", "WIP"],
+  "caseSensitive": false
+}
