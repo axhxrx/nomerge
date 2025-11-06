@@ -215,11 +215,11 @@ function isIgnored(filePath: string, ignorePatterns: string[]): boolean {
     // ** matches anything including /
     // ? matches any single character except /
     const regexPattern = normalizedPattern
+      .replace(/\./g, "\\.")  // Escape literal dots FIRST
       .replace(/\*\*/g, "___DOUBLESTAR___")
       .replace(/\*/g, "[^/]*")
       .replace(/___DOUBLESTAR___/g, ".*")
-      .replace(/\?/g, "[^/]")
-      .replace(/\./g, "\\.");
+      .replace(/\?/g, "[^/]");
 
     const regex = new RegExp(`^${regexPattern}$`);
     if (regex.test(normalizedPath)) {
