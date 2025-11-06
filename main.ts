@@ -8,7 +8,7 @@
  * 2. CLI tool (reads from command-line arguments)
  *
  * CLI Usage:
- *   deno run --allow-read main.ts --nomerge FIXME --nomerge TODO --ignore "**/*.html"
+ *   deno run --allow-read main.ts --nomerge FIXME --nomerge TODO --ignore "*.html"
  *   deno run --allow-read main.ts --help
  *
  * GitHub Actions Usage:
