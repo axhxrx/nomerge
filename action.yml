@@ -31,7 +31,7 @@ runs:
           --allow-env \
           --allow-net \
           --allow-read \
-          ${{ github.action_path }}/src/main.ts
+          ${{ github.action_path }}/main.ts
 
 branding:
   icon: 'shield'
