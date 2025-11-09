@@ -3,10 +3,8 @@
   "ignore": [
     "README.md",
     "src/**",
-    "PLAN.md",
-    "BRANCH_PROTECTION.md",
-    "test-*.md",
     "fixtures/**",
+    "unused/**",
     "main.ts",
     "main_test.ts",
     "cli_integration_test.ts",
