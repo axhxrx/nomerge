@@ -1,0 +1,5 @@
+{
+  "nomerge": "nomerge",
+  "caseSensitive": false,
+  "ignore": ["docs/**", "**/*.spec.js", "*.md"]
+}
