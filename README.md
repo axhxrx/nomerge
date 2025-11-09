@@ -1,6 +1,10 @@
-# NoMerge GitHub Action
+# NoMerge
 
-A GitHub Action that prevents PR merges when forbidden text patterns are found in files or PR descriptions.
+Prevent PR merges when forbidden text patterns are found in files or PR descriptions.
+
+Can be used as:
+- **GitHub Action** - Automatically check PRs
+- **CLI Tool** - Run locally or in build scripts
 
 ## Overview
 
@@ -13,16 +17,51 @@ By default, it searches for "nomerge" (case-insensitive), but patterns are fully
 
 ## Features
 
-- ✅ Configurable patterns via `.nomerge.config.json`
+- ✅ Configurable patterns via `.nomerge.config.json` or CLI args
 - ✅ Supports multiple patterns (string or array)
+- ✅ Ignore patterns with glob support (`*`, `**`, `?`)
 - ✅ Case-sensitive option available
-- ✅ Scans all files changed in the PR
+- ✅ Scans all files changed in the PR (or local directory)
 - ✅ Checks PR description/body
 - ✅ Built with TypeScript and Deno
 - ✅ Clear, actionable error messages
 - ✅ Fast and lightweight
+- ✅ Can run directly from JSR.io (no installation needed)
 
 ## Usage
+
+### As a CLI Tool
+
+Run directly from JSR (once published):
+
+```bash
+# Check for default "nomerge" pattern in current directory
+deno run --allow-read https://jsr.io/@axhxrx/nomerge/0.0.1/main.ts
+
+# Check for custom patterns
+deno run --allow-read https://jsr.io/@axhxrx/nomerge/0.0.1/main.ts \
+  --nomerge FIXME \
+  --nomerge TODO
+
+# Ignore specific files
+deno run --allow-read https://jsr.io/@axhxrx/nomerge/0.0.1/main.ts \
+  --ignore "**/*.html" \
+  --ignore "test/**"
+
+# Case-sensitive search
+deno run --allow-read https://jsr.io/@axhxrx/nomerge/0.0.1/main.ts \
+  --nomerge FIXME \
+  --case-sensitive
+
+# Scan a specific directory
+deno run --allow-read https://jsr.io/@axhxrx/nomerge/0.0.1/main.ts \
+  --directory ./src
+
+# Show help
+deno run https://jsr.io/@axhxrx/nomerge/0.0.1/main.ts --help
+```
+
+### As a GitHub Action
 
 Add this action to your workflow file (e.g., `.github/workflows/nomerge-check.yml`):
 
@@ -68,8 +107,9 @@ Create `.nomerge.config.json` with the following options:
 
 **Options:**
 
-- `nomerge` (string | string[]): Pattern(s) to search for. Can be a single string or an array of strings.
+- `nomerge` (string | string[]): Pattern(s) to search for. Can be a single string or an array of strings. Default: `"nomerge"`
 - `caseSensitive` (boolean, optional): Whether to perform case-sensitive matching. Default: `false`
+- `ignore` (string[], optional): Array of glob patterns for files to ignore. Supports `*`, `**`, and `?` wildcards
 
 ### Configuration Examples
 
@@ -92,6 +132,18 @@ Create `.nomerge.config.json` with the following options:
 {
   "nomerge": "NoMerge",
   "caseSensitive": true
+}
+```
+
+**With ignore patterns:**
+```json
+{
+  "nomerge": ["TODO", "FIXME"],
+  "ignore": [
+    "*.md",
+    "docs/**",
+    "**/*.test.ts"
+  ]
 }
 ```
 
@@ -121,12 +173,21 @@ Built with:
 ### Local Testing
 
 ```bash
-# Check TypeScript syntax
-deno check src/main.ts
+# Run tests
+deno test --allow-read
 
-# Run locally (requires GITHUB_TOKEN env var)
+# Check TypeScript syntax
+deno check main.ts
+
+# Run CLI mode locally
+deno run --allow-read main.ts
+
+# Run as GitHub Action (requires GITHUB_TOKEN and event file)
 export GITHUB_TOKEN=your_token
-deno run --allow-env --allow-net --allow-read src/main.ts
+export GITHUB_EVENT_PATH=path/to/event.json
+export GITHUB_REPOSITORY=owner/repo
+export GITHUB_ACTIONS=true
+deno run --allow-env --allow-net --allow-read main.ts
 ```
 
 ## Requirements
