@@ -427,6 +427,7 @@ export function findPatternMatches(
 
 /**
  * Check PR description for forbidden patterns
+ * Excludes code blocks (text within backticks) to avoid false positives
  */
 function checkDescription(
   description: string | null,
@@ -436,7 +437,14 @@ function checkDescription(
   if (!description) {
     return false;
   }
-  return containsPattern(description, patterns, caseSensitive);
+
+  // Remove code blocks (both inline `code` and fenced ```code blocks```)
+  // to avoid false positives from config filenames and code examples
+  let cleanedDescription = description
+    .replace(/```[\s\S]*?```/g, '') // Remove fenced code blocks
+    .replace(/`[^`]+`/g, '');        // Remove inline code
+
+  return containsPattern(cleanedDescription, patterns, caseSensitive);
 }
 
 /**
