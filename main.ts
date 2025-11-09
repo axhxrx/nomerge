@@ -48,11 +48,24 @@ interface GitHubFile {
   contents_url: string;
 }
 
+interface PatternMatch {
+  pattern: string;  // Original pattern being searched for
+  actualText: string;  // Actual text found (may differ in case)
+  count: number;  // Number of times this variant appears
+}
+
+interface FileMatch {
+  filename: string;
+  matches: PatternMatch[];
+  totalCount: number;
+}
+
 interface CheckResult {
   passed: boolean;
   foundInDescription: boolean;
-  foundInFiles: string[];
+  foundInFiles: FileMatch[];
   message: string;
+  patterns: string[];  // All patterns being checked
 }
 
 interface NoMergeConfig {
@@ -375,6 +388,44 @@ export function containsPattern(
 }
 
 /**
+ * Find all pattern matches in text with detailed information
+ * Returns an array of matches with the pattern, actual text found, and count
+ */
+export function findPatternMatches(
+  text: string,
+  patterns: string[],
+  caseSensitive: boolean
+): PatternMatch[] {
+  const matchMap = new Map<string, PatternMatch>();
+
+  for (const pattern of patterns) {
+    const flags = caseSensitive ? "g" : "gi";
+    const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(escapedPattern, flags);
+    const matches = text.matchAll(regex);
+
+    for (const match of matches) {
+      const actualText = match[0];
+      // Create a unique key for each variant (pattern + actual case)
+      const key = `${pattern}:${actualText}`;
+
+      if (matchMap.has(key)) {
+        const existing = matchMap.get(key)!;
+        existing.count++;
+      } else {
+        matchMap.set(key, {
+          pattern,
+          actualText,
+          count: 1,
+        });
+      }
+    }
+  }
+
+  return Array.from(matchMap.values());
+}
+
+/**
  * Check PR description for forbidden patterns
  */
 function checkDescription(
@@ -400,8 +451,8 @@ async function checkFiles(
   patterns: string[],
   caseSensitive: boolean,
   ignorePatterns: string[]
-): Promise<string[]> {
-  const filesWithPattern: string[] = [];
+): Promise<FileMatch[]> {
+  const fileMatches: FileMatch[] = [];
   const patternDisplay = patterns.length === 1 ? `"${patterns[0]}"` : `[${patterns.map((p) => `"${p}"`).join(", ")}]`;
 
   console.log(`\n📁 Checking ${files.length} files for forbidden pattern(s): ${patternDisplay}`);
@@ -432,9 +483,15 @@ async function checkFiles(
       console.log(`  🔍 Checking: ${file.filename}`);
       const content = await client.getFileContent(owner, repo, file.filename, ref);
 
-      if (containsPattern(content, patterns, caseSensitive)) {
+      const matches = findPatternMatches(content, patterns, caseSensitive);
+      if (matches.length > 0) {
+        const totalCount = matches.reduce((sum, m) => sum + m.count, 0);
         console.log(`  ⚠️  Found forbidden pattern in: ${file.filename}`);
-        filesWithPattern.push(file.filename);
+        fileMatches.push({
+          filename: file.filename,
+          matches,
+          totalCount,
+        });
       } else {
         console.log(`  ✅ Clean: ${file.filename}`);
       }
@@ -446,7 +503,7 @@ async function checkFiles(
     }
   }
 
-  return filesWithPattern;
+  return fileMatches;
 }
 
 /**
@@ -457,8 +514,8 @@ async function checkLocalFiles(
   patterns: string[],
   caseSensitive: boolean,
   ignorePatterns: string[]
-): Promise<string[]> {
-  const filesWithPattern: string[] = [];
+): Promise<FileMatch[]> {
+  const fileMatches: FileMatch[] = [];
   const patternDisplay = patterns.length === 1 ? `"${patterns[0]}"` : `[${patterns.map((p) => `"${p}"`).join(", ")}]`;
 
   console.log(`\n📁 Scanning directory: ${directory}`);
@@ -496,9 +553,15 @@ async function checkLocalFiles(
           console.log(`  🔍 Checking: ${relativePath}`);
           const content = await Deno.readTextFile(fullPath);
 
-          if (containsPattern(content, patterns, caseSensitive)) {
+          const matches = findPatternMatches(content, patterns, caseSensitive);
+          if (matches.length > 0) {
+            const totalCount = matches.reduce((sum, m) => sum + m.count, 0);
             console.log(`  ⚠️  Found forbidden pattern in: ${relativePath}`);
-            filesWithPattern.push(relativePath);
+            fileMatches.push({
+              filename: relativePath,
+              matches,
+              totalCount,
+            });
           } else {
             console.log(`  ✅ Clean: ${relativePath}`);
           }
@@ -511,7 +574,7 @@ async function checkLocalFiles(
   }
 
   await walk(directory, directory);
-  return filesWithPattern;
+  return fileMatches;
 }
 
 // ============================================================================
@@ -598,7 +661,7 @@ async function runGitHubActionsMode(): Promise<CheckResult> {
   // Determine result
   const passed = !foundInDescription && foundInFiles.length === 0;
 
-  // Build message
+  // Build message with detailed pattern counts
   const patternDisplay = patterns.length === 1 ? `"${patterns[0]}"` : `patterns: ${patterns.map((p) => `"${p}"`).join(", ")}`;
   let message = "";
   if (passed) {
@@ -610,8 +673,11 @@ async function runGitHubActionsMode(): Promise<CheckResult> {
     }
     if (foundInFiles.length > 0) {
       message += `  - ${foundInFiles.length} file(s) contain forbidden pattern:\n`;
-      foundInFiles.forEach((file) => {
-        message += `    • ${file}\n`;
+      foundInFiles.forEach((fileMatch) => {
+        // Group matches by pattern
+        const uniquePatterns = new Set(fileMatch.matches.map(m => m.actualText));
+        const patternList = Array.from(uniquePatterns).map(p => `"${p}"`).join(", ");
+        message += `    • ${fileMatch.filename}: ${fileMatch.totalCount} forbidden pattern${fileMatch.totalCount > 1 ? "s" : ""}: ${patternList}\n`;
       });
     }
   }
@@ -621,6 +687,7 @@ async function runGitHubActionsMode(): Promise<CheckResult> {
     foundInDescription,
     foundInFiles,
     message,
+    patterns,
   };
 }
 
@@ -641,7 +708,7 @@ async function runCliMode(options: CliOptions): Promise<CheckResult> {
   // Determine result
   const passed = foundInFiles.length === 0;
 
-  // Build message
+  // Build message with detailed pattern counts
   const patternDisplay = patterns.length === 1 ? `"${patterns[0]}"` : `patterns: ${patterns.map((p) => `"${p}"`).join(", ")}`;
   let message = "";
   if (passed) {
@@ -649,8 +716,11 @@ async function runCliMode(options: CliOptions): Promise<CheckResult> {
   } else {
     message = `❌ Found forbidden ${patternDisplay}:\n`;
     message += `  - ${foundInFiles.length} file(s) contain forbidden pattern:\n`;
-    foundInFiles.forEach((file) => {
-      message += `    • ${file}\n`;
+    foundInFiles.forEach((fileMatch) => {
+      // Group matches by pattern
+      const uniquePatterns = new Set(fileMatch.matches.map(m => m.actualText));
+      const patternList = Array.from(uniquePatterns).map(p => `"${p}"`).join(", ");
+      message += `    • ${fileMatch.filename}: ${fileMatch.totalCount} forbidden pattern${fileMatch.totalCount > 1 ? "s" : ""}: ${patternList}\n`;
     });
   }
 
@@ -659,7 +729,86 @@ async function runCliMode(options: CliOptions): Promise<CheckResult> {
     foundInDescription: false,
     foundInFiles,
     message,
+    patterns,
   };
+}
+
+/**
+ * Print usage and setup instructions
+ */
+function printInstructions(isGitHubActions: boolean): void {
+  // Use GitHub Actions log groups if available to make output collapsible
+  if (isGitHubActions) {
+    console.log("::group::📖 Usage Instructions & Setup Guide");
+  } else {
+    console.log("\n" + "=".repeat(50));
+    console.log("📖 USAGE INSTRUCTIONS");
+    console.log("=".repeat(50));
+  }
+
+  if (isGitHubActions) {
+    console.log("\n📝 Using NoMerge in Other Repositories:");
+    console.log("\nAdd this workflow file (e.g., .github/workflows/nomerge.yml):");
+    console.log("```yaml");
+    console.log("name: NoMerge Check");
+    console.log("");
+    console.log("on:");
+    console.log("  pull_request:");
+    console.log("    types: [opened, synchronize, reopened]");
+    console.log("");
+    console.log("jobs:");
+    console.log("  check:");
+    console.log("    runs-on: ubuntu-latest");
+    console.log("    steps:");
+    console.log("      - uses: actions/checkout@v4");
+    console.log("      ");
+    console.log("      - name: Run NoMerge Check");
+    console.log("        uses: axhxrx/nomerge@main");
+    console.log("        with:");
+    console.log("          github-token: ${{ secrets.GITHUB_TOKEN }}");
+    console.log("```");
+  } else {
+    console.log("\n📝 CLI Usage:");
+    console.log("\n# Check current directory with default pattern");
+    console.log("deno run --allow-read main.ts");
+    console.log("\n# Check with custom patterns");
+    console.log("deno run --allow-read main.ts --nomerge TODO --nomerge FIXME");
+    console.log("\n# With ignore patterns");
+    console.log('deno run --allow-read main.ts --ignore "**/*.md" --ignore "test/**"');
+  }
+
+  console.log("\n🔒 BRANCH PROTECTION SETUP (REQUIRED)");
+  console.log("=".repeat(50));
+  console.log("\n⚠️  Important: GitHub allows PRs to merge even with failed checks");
+  console.log("unless you enable branch protection!");
+  console.log("\nTo actually block merges when patterns are found:");
+  console.log("\n1. Go to your repository Settings → Branches");
+  console.log("2. Add branch protection rule for 'main' (or your target branch)");
+  console.log("3. Enable: ☑ Require status checks to pass before merging");
+  console.log("4. Search for and select: 'Check for NoMerge markers'");
+  console.log("5. Click 'Create' or 'Save changes'");
+  console.log("\nAlternatively, use the GitHub API:");
+  console.log("```bash");
+  console.log("curl -X PUT \\");
+  console.log('  -H "Authorization: Bearer YOUR_GITHUB_TOKEN" \\');
+  console.log("  https://api.github.com/repos/OWNER/REPO/branches/main/protection \\");
+  console.log("  -d '{");
+  console.log('    "required_status_checks": {');
+  console.log('      "strict": true,');
+  console.log('      "contexts": ["Check for NoMerge markers"]');
+  console.log("    },");
+  console.log('    "enforce_admins": false,');
+  console.log('    "required_pull_request_reviews": null,');
+  console.log('    "restrictions": null');
+  console.log("  }'");
+  console.log("```");
+  console.log("\nSee: https://github.com/axhxrx/nomerge/blob/main/BRANCH_PROTECTION.md");
+
+  if (isGitHubActions) {
+    console.log("::endgroup::");
+  } else {
+    console.log("=".repeat(50));
+  }
 }
 
 /**
@@ -708,10 +857,18 @@ export async function main(): Promise<void> {
         console.log("  - Remove forbidden patterns from the files listed above");
         console.log("  - Or add them to the ignore list in .nomerge.config.json");
       }
+
+      // Print instructions (always show, even on failure)
+      printInstructions(isGitHubActions);
+
       Deno.exit(1);
     }
 
     console.log("\n🎉 Check passed!");
+
+    // Print instructions (always show, even on success)
+    printInstructions(isGitHubActions);
+
     Deno.exit(0);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
