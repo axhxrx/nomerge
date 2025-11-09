@@ -24,4 +24,4 @@ These files are retained in the repository to:
 
 ## Note
 
-These files are not part of the active codebase and are ignored by the NoMerge action checks.
+These files are not part of the active codebase and are ignored by the action checks.
