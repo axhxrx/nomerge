@@ -5,6 +5,12 @@
     "src/**",
     "PLAN.md",
     "BRANCH_PROTECTION.md",
-    "test-*.md"
+    "test-*.md",
+    "fixtures/**",
+    "main.ts",
+    "main_test.ts",
+    "cli_integration_test.ts",
+    "mod.ts",
+    "action.yml"
   ]
 }
