@@ -737,9 +737,14 @@ async function runCliMode(options: CliOptions): Promise<CheckResult> {
  * Print usage and setup instructions
  */
 function printInstructions(isGitHubActions: boolean): void {
-  console.log("\n" + "=".repeat(50));
-  console.log("📖 USAGE INSTRUCTIONS");
-  console.log("=".repeat(50));
+  // Use GitHub Actions log groups if available to make output collapsible
+  if (isGitHubActions) {
+    console.log("::group::📖 Usage Instructions & Setup Guide");
+  } else {
+    console.log("\n" + "=".repeat(50));
+    console.log("📖 USAGE INSTRUCTIONS");
+    console.log("=".repeat(50));
+  }
 
   if (isGitHubActions) {
     console.log("\n📝 Using NoMerge in Other Repositories:");
@@ -757,16 +762,8 @@ function printInstructions(isGitHubActions: boolean): void {
     console.log("    steps:");
     console.log("      - uses: actions/checkout@v4");
     console.log("      ");
-    console.log("      - name: Checkout NoMerge Action");
-    console.log("        uses: actions/checkout@v4");
-    console.log("        with:");
-    console.log("          repository: axhxrx/nomerge");
-    console.log("          ref: main");
-    console.log("          path: .github/actions/nomerge");
-    console.log("          token: ${{ secrets.GITHUB_TOKEN }}");
-    console.log("      ");
-    console.log("      - name: Run NoMerge");
-    console.log("        uses: ./.github/actions/nomerge");
+    console.log("      - name: Run NoMerge Check");
+    console.log("        uses: axhxrx/nomerge@main");
     console.log("        with:");
     console.log("          github-token: ${{ secrets.GITHUB_TOKEN }}");
     console.log("```");
@@ -806,7 +803,12 @@ function printInstructions(isGitHubActions: boolean): void {
   console.log("  }'");
   console.log("```");
   console.log("\nSee: https://github.com/axhxrx/nomerge/blob/main/BRANCH_PROTECTION.md");
-  console.log("=".repeat(50));
+
+  if (isGitHubActions) {
+    console.log("::endgroup::");
+  } else {
+    console.log("=".repeat(50));
+  }
 }
 
 /**
