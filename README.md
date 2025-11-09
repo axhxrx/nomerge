@@ -1,4 +1,8 @@
-# NoMerge
+🚨 WARNING: ALL-LLM CODE: As of 2025-11-09 this entire repo has been coded by Claude Code with zero human code review and only giving instructions via the browser on my phone. It's an experiment to test Claude Code, including all the README below this line. This paragraph is the only thing written by or reviewed by a human in the entire project.
+
+---
+
+# NoMerge GitHub Action
 
 Prevent PR merges when forbidden text patterns are found in files or PR descriptions.
 
