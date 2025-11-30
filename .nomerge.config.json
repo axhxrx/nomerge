@@ -11,6 +11,7 @@
     "unused/test-branch-protection.md",
     "unused/test-file-001.md",
     "unused/test-with-space.md",
+    ".github/workflows/**",
     "main.ts",
     "main_test.ts",
     "cli_integration_test.ts",

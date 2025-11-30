@@ -81,14 +81,18 @@ jobs:
     runs-on: ubuntu-latest
     name: Check for NoMerge markers
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comparing branches
 
       - name: Run NoMerge Check
-        uses: ./
+        uses: axhxrx/nomerge@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+**Note:** Replace `@main` with a specific version tag (e.g., `@v1.0.0`) for production use to ensure stability.
 
 ## Configuration
 
@@ -207,7 +211,7 @@ The NoMerge action detects forbidden patterns and fails the workflow check, but 
 
 ### Quick Setup
 
-See **[BRANCH_PROTECTION.md](BRANCH_PROTECTION.md)** for detailed instructions.
+See **[unused/BRANCH_PROTECTION.md](unused/BRANCH_PROTECTION.md)** for detailed instructions.
 
 **Quick command (using GitHub API):**
 ```bash
@@ -224,7 +228,7 @@ curl -X PUT \
 3. Enable: ✅ **Require status checks to pass before merging**
 4. Select: ✅ **Check for NoMerge markers**
 
-See [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md) for complete instructions.
+See [unused/BRANCH_PROTECTION.md](unused/BRANCH_PROTECTION.md) for complete instructions.
 
 ## License
 
@@ -232,4 +236,4 @@ MIT
 
 ## Contributing
 
-Contributions welcome! Please see [PLAN.md](PLAN.md) for the development roadmap.
+Contributions welcome! Please see [unused/PLAN.md](unused/PLAN.md) for the development roadmap.

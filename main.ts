@@ -300,9 +300,14 @@ async function loadConfig(
   repo: string,
   ref: string
 ): Promise<NoMergeConfig> {
+  const defaultIgnorePatterns = [
+    ".github/workflows/**", // Workflow files naturally contain action names
+  ];
+
   const defaultConfig: NoMergeConfig = {
     nomerge: "nomerge",
     caseSensitive: false,
+    ignore: defaultIgnorePatterns,
   };
 
   try {
@@ -314,11 +319,11 @@ async function loadConfig(
     );
     const config = JSON.parse(configContent) as NoMergeConfig;
 
-    // Merge with defaults
+    // Merge with defaults, combining ignore patterns
     return {
       nomerge: config.nomerge ?? defaultConfig.nomerge,
       caseSensitive: config.caseSensitive ?? defaultConfig.caseSensitive,
-      ignore: config.ignore ?? [],
+      ignore: config.ignore ? [...defaultIgnorePatterns, ...config.ignore] : defaultIgnorePatterns,
     };
   } catch (_error) {
     // Config file doesn't exist or can't be read - use defaults
